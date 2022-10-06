@@ -56,6 +56,7 @@ library
     Cardano.Crypto.DSIGNM.Class
     Cardano.Crypto.DSIGN.Mock
     Cardano.Crypto.DSIGN.NeverUsed
+    Cardano.Crypto.DirectSerialise
     Cardano.Crypto.Hash
     Cardano.Crypto.Hash.Blake2b
     Cardano.Crypto.Hash.Class

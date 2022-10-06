@@ -29,7 +29,7 @@ import Foreign.Ptr (castPtr, nullPtr)
 import qualified Data.ByteString as BS
 -- import qualified Data.ByteString.Unsafe as BS
 import Data.Proxy
-import Control.Exception (evaluate)
+import Control.Exception (evaluate, bracket)
 
 import Cardano.Binary (FromCBOR (..), ToCBOR (..))
 
@@ -44,6 +44,7 @@ import Cardano.Crypto.MonadSodium (MonadSodium (..), mlsbToByteString, mlsbFromB
 import Cardano.Crypto.DSIGNM.Class
 -- import Cardano.Crypto.Seed
 import Cardano.Crypto.Util (SignableRepresentation(..))
+import Cardano.Crypto.DirectSerialise
 
 
 data Ed25519DSIGNM
@@ -203,6 +204,39 @@ instance DSIGNMAlgorithm IO Ed25519DSIGNM where
           mlsbFinalize seed
           return sk
 
+instance DirectSerialise (SignKeyDSIGNM Ed25519DSIGNM) where
+  directSerialise push sk = do
+    bracket
+      (getSeedDSIGNM (Proxy @Ed25519DSIGNM) sk)
+      mlsbFinalize
+      (\mlsb -> mlsbUseAsCPtr mlsb $ \ptr ->
+          push
+            (castPtr ptr)
+            (fromIntegral $ seedSizeDSIGNM (Proxy @Ed25519DSIGNM)))
+
+instance DirectDeserialise (SignKeyDSIGNM Ed25519DSIGNM) where
+  directDeserialise pull = do
+    mlsb <- mlsbNew
+    mlsbUseAsCPtr mlsb $ \ptr ->
+      pull
+        (castPtr ptr)
+        (fromIntegral $ seedSizeDSIGNM (Proxy @Ed25519DSIGNM))
+    return $ SignKeyEd25519DSIGNM mlsb
+
+instance DirectSerialise (VerKeyDSIGNM Ed25519DSIGNM) where
+  directSerialise push (VerKeyEd25519DSIGNM psb) = do
+    psbUseAsCPtr psb $ \ptr ->
+      push
+        (castPtr ptr)
+        (fromIntegral $ sizeVerKeyDSIGNM (Proxy @Ed25519DSIGNM))
+
+instance DirectDeserialise (VerKeyDSIGNM Ed25519DSIGNM) where
+  directDeserialise pull = do
+    psb <- psbCreate $ \ptr ->
+      pull
+        (castPtr ptr)
+        (fromIntegral $ sizeVerKeyDSIGNM (Proxy @Ed25519DSIGNM))
+    return $ VerKeyEd25519DSIGNM psb
 
 instance ToCBOR (VerKeyDSIGNM Ed25519DSIGNM) where
   toCBOR = encodeVerKeyDSIGNM

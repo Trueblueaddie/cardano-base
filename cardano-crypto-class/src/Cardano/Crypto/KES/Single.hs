@@ -50,6 +50,7 @@ import Cardano.Binary (FromCBOR (..), ToCBOR (..))
 import Cardano.Crypto.Hash.Class
 import Cardano.Crypto.DSIGNM.Class as DSIGNM
 import Cardano.Crypto.KES.Class
+import Cardano.Crypto.DirectSerialise
 
 
 -- | A standard signature scheme is a forward-secure signature scheme with a
@@ -109,7 +110,6 @@ instance (DSIGNMAlgorithmBase d) => KESAlgorithm (SingleKES d) where
 
     rawDeserialiseVerKeyKES  = fmap VerKeySingleKES  . rawDeserialiseVerKeyDSIGNM
     rawDeserialiseSigKES     = fmap SigSingleKES     . rawDeserialiseSigDSIGNM
-
 
 instance ( DSIGNMAlgorithm m d -- needed for secure forgetting
          , Monad m
@@ -185,3 +185,19 @@ instance DSIGNMAlgorithmBase d => ToCBOR (SigKES (SingleKES d)) where
 
 instance DSIGNMAlgorithmBase d => FromCBOR (SigKES (SingleKES d)) where
   fromCBOR = decodeSigKES
+
+--
+-- Direct ser/deser
+--
+
+instance (DirectSerialise (SignKeyDSIGNM d)) => DirectSerialise (SignKeyKES (SingleKES d)) where
+  directSerialise push (SignKeySingleKES sk) = directSerialise push sk
+
+instance (DirectDeserialise (SignKeyDSIGNM d)) => DirectDeserialise (SignKeyKES (SingleKES d)) where
+  directDeserialise pull = SignKeySingleKES <$> directDeserialise pull
+
+instance (DirectSerialise (VerKeyDSIGNM d)) => DirectSerialise (VerKeyKES (SingleKES d)) where
+  directSerialise push (VerKeySingleKES sk) = directSerialise push sk
+
+instance (DirectDeserialise (VerKeyDSIGNM d)) => DirectDeserialise (VerKeyKES (SingleKES d)) where
+  directDeserialise pull = VerKeySingleKES <$> directDeserialise pull

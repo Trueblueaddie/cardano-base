@@ -87,6 +87,8 @@ import           Control.Monad.Trans (lift)
 import           Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import           Control.DeepSeq (NFData)
 import           NoThunks.Class (NoThunks)
+import           Foreign.Ptr (castPtr)
+import           Foreign.Marshal.Alloc (allocaBytes)
 
 import           Cardano.Binary (FromCBOR (..), ToCBOR (..))
 
@@ -96,6 +98,7 @@ import           Cardano.Crypto.KES.CompactSingle (CompactSingleKES)
 import qualified Cardano.Crypto.MonadSodium as NaCl
 
 import           Cardano.Crypto.Util
+import           Cardano.Crypto.DirectSerialise
 
 -- | A 2^0 period KES
 type CompactSum0KES d   = CompactSingleKES d
@@ -464,3 +467,53 @@ instance ( OptimizedKESAlgorithm d
          )
       => FromCBOR (SigKES (CompactSumKES h d)) where
   fromCBOR = decodeSigKES
+
+--
+-- Direct ser/deser
+--
+
+instance ( DirectSerialise (SignKeyKES d)
+         , DirectSerialise (VerKeyKES d)
+         , KESAlgorithm d
+         , KnownNat (SeedSizeKES d)
+         ) => DirectSerialise (SignKeyKES (CompactSumKES h d)) where
+  directSerialise push (SignKeyCompactSumKES sk r vk0 vk1) = do
+    directSerialise push sk
+    NaCl.interactSafePinned r $ \mlsb ->
+      NaCl.mlsbUseAsCPtr mlsb $ \ptr ->
+        push (castPtr ptr) (fromIntegral $ seedSizeKES (Proxy :: Proxy d))
+    directSerialise push vk0
+    directSerialise push vk1
+
+instance ( DirectDeserialise (SignKeyKES d)
+         , DirectDeserialise (VerKeyKES d)
+         , KESAlgorithm d
+         , KnownNat (SeedSizeKES d)
+         ) => DirectDeserialise (SignKeyKES (CompactSumKES h d)) where
+  directDeserialise pull = do
+    sk <- directDeserialise pull
+
+    mlsb <- NaCl.mlsbNew
+    NaCl.mlsbUseAsCPtr mlsb $ \ptr ->
+      pull (castPtr ptr) (fromIntegral $ seedSizeKES (Proxy :: Proxy d))
+    r <- NaCl.makeSafePinned mlsb
+
+    vk0 <- directDeserialise pull
+    vk1 <- directDeserialise pull
+
+    return $ SignKeyCompactSumKES sk r vk0 vk1
+
+
+instance DirectSerialise (VerKeyKES (CompactSumKES h d)) where
+  directSerialise push (VerKeyCompactSumKES h) = do
+    BS.useAsCStringLen (hashToBytes h) $ \(ptr, len) ->
+      push (castPtr ptr) (fromIntegral len)
+
+instance HashAlgorithm h => DirectDeserialise (VerKeyKES (CompactSumKES h d)) where
+  directDeserialise pull = do
+    let len :: Num a => a
+        len = fromIntegral $ sizeHash (Proxy @h)
+    allocaBytes len $ \ptr -> do
+      pull ptr len
+      bs <- BS.packCStringLen (ptr, len)
+      maybe (fail "Invalid hash") return $ VerKeyCompactSumKES <$> hashFromBytes bs

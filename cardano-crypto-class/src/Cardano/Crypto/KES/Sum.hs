@@ -57,11 +57,14 @@ import           Cardano.Crypto.Hash.Class
 import           Cardano.Crypto.KES.Class
 import           Cardano.Crypto.KES.Single (SingleKES)
 import           Cardano.Crypto.Util
+import           Cardano.Crypto.DirectSerialise
 
 import qualified Cardano.Crypto.MonadSodium as NaCl
 import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import Control.DeepSeq (NFData)
 
+import Foreign.Ptr (castPtr)
+import Foreign.Marshal.Alloc
 import GHC.TypeLits (KnownNat, type (+), type (*))
 
 -- | A 2^0 period KES
@@ -372,3 +375,52 @@ instance (KESAlgorithm (SumKES h d), NaCl.SodiumHashAlgorithm h, SizeHash h ~ Se
 instance (KESAlgorithm (SumKES h d), NaCl.SodiumHashAlgorithm h, SizeHash h ~ SeedSizeKES d)
       => FromCBOR (SigKES (SumKES h d)) where
   fromCBOR = decodeSigKES
+
+--
+-- Direct ser/deser
+--
+
+instance ( DirectSerialise (SignKeyKES d)
+         , DirectSerialise (VerKeyKES d)
+         , KESAlgorithm d
+         , KnownNat (SeedSizeKES d)
+         ) => DirectSerialise (SignKeyKES (SumKES h d)) where
+  directSerialise push (SignKeySumKES sk r vk0 vk1) = do
+    directSerialise push sk
+    NaCl.interactSafePinned r $ \mlsb ->
+      NaCl.mlsbUseAsCPtr mlsb $ \ptr ->
+        push (castPtr ptr) (fromIntegral $ seedSizeKES (Proxy :: Proxy d))
+    directSerialise push vk0
+    directSerialise push vk1
+
+instance ( DirectDeserialise (SignKeyKES d)
+         , DirectDeserialise (VerKeyKES d)
+         , KESAlgorithm d
+         , KnownNat (SeedSizeKES d)
+         ) => DirectDeserialise (SignKeyKES (SumKES h d)) where
+  directDeserialise pull = do
+    sk <- directDeserialise pull
+
+    mlsb <- NaCl.mlsbNew
+    NaCl.mlsbUseAsCPtr mlsb $ \ptr ->
+      pull (castPtr ptr) (fromIntegral $ seedSizeKES (Proxy :: Proxy d))
+    r <- NaCl.makeSafePinned mlsb
+
+    vk0 <- directDeserialise pull
+    vk1 <- directDeserialise pull
+
+    return $ SignKeySumKES sk r vk0 vk1
+
+instance DirectSerialise (VerKeyKES (SumKES h d)) where
+  directSerialise push (VerKeySumKES h) = do
+    BS.useAsCStringLen (hashToBytes h) $ \(ptr, len) ->
+      push (castPtr ptr) (fromIntegral len)
+
+instance HashAlgorithm h => DirectDeserialise (VerKeyKES (SumKES h d)) where
+  directDeserialise pull = do
+    let len :: Num a => a
+        len = fromIntegral $ sizeHash (Proxy @h)
+    allocaBytes len $ \ptr -> do
+      pull ptr len
+      bs <- BS.packCStringLen (ptr, len)
+      maybe (fail "Invalid hash") return $ VerKeySumKES <$> hashFromBytes bs
