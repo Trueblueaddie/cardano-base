@@ -2,7 +2,7 @@
   cell,
   inputs,
 }: {
-  "cardano-base/ci" = {
+  "cardano-base/ci/wip" = {
     task = "ci";
     io = ''
       // This is a CUE expression that defines what events trigger a new run of this action.

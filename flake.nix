@@ -3,7 +3,7 @@
     nixpkgs.follows = "std/nixpkgs";
     std.url = github:divnix/std;
     tullia = {
-      url = github:input-output-hk/tullia;
+      url = github:input-output-hk/tullia/gtgfast;
       inputs.std.follows = "std";
     };
   };

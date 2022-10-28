@@ -17,15 +17,28 @@
         # so we don't need to fetch the source from GitHub and we don't want to report a GitHub status.
         enable = config.actionRun.facts != {};
         repo = "input-output-hk/cardano-base";
-        sha = config.preset.github-ci.lib.getRevision inputs.cells.cloud.library.actionCiInputName null;
+        sha = config.preset.github-ci.lib.readRevision inputs.cells.cloud.library.actionCiInputName null;
       };
     };
   };
 
   ciTasks =
     __mapAttrs
-    (_: flakeOutputTask: {...}: {
+    (_: flakeOutputTask: {pkgs, ...}: {
       imports = [common flakeOutputTask];
+
+      commands = lib.mkOrder 0 [
+        {
+          type = "shell";
+          runtimeInputs = [pkgs.coreutils];
+          text = ''
+            set -x
+            ls -lah "$TULLIA_FACTS" || :
+            ls -lah "$TULLIA_FACTS"/GitHub\ event.json || :
+            cat "$TULLIA_FACTS"/* || :
+          '';
+        }
+      ];
 
       memory = 1024 * 8;
       nomad.resources.cpu = 10000;
