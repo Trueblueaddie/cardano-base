@@ -367,7 +367,6 @@ testDSIGNMAlgorithm
                  , FromCBOR (SigDSIGNM v)
                  , SignableM v a
                  , ContextDSIGNM v ~ ()
-                 , ContextDSIGN w ~ ()
                  , Eq a
                  )
   => Lock
