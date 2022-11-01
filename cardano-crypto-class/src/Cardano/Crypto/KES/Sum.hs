@@ -383,7 +383,6 @@ instance (KESAlgorithm (SumKES h d), NaCl.SodiumHashAlgorithm h, SizeHash h ~ Se
 instance ( DirectSerialise (SignKeyKES d)
          , DirectSerialise (VerKeyKES d)
          , KESAlgorithm d
-         , KnownNat (SeedSizeKES d)
          ) => DirectSerialise (SignKeyKES (SumKES h d)) where
   directSerialise push (SignKeySumKES sk r vk0 vk1) = do
     directSerialise push sk
@@ -396,7 +395,6 @@ instance ( DirectSerialise (SignKeyKES d)
 instance ( DirectDeserialise (SignKeyKES d)
          , DirectDeserialise (VerKeyKES d)
          , KESAlgorithm d
-         , KnownNat (SeedSizeKES d)
          ) => DirectDeserialise (SignKeyKES (SumKES h d)) where
   directDeserialise pull = do
     sk <- directDeserialise pull

@@ -475,7 +475,6 @@ instance ( OptimizedKESAlgorithm d
 instance ( DirectSerialise (SignKeyKES d)
          , DirectSerialise (VerKeyKES d)
          , KESAlgorithm d
-         , KnownNat (SeedSizeKES d)
          ) => DirectSerialise (SignKeyKES (CompactSumKES h d)) where
   directSerialise push (SignKeyCompactSumKES sk r vk0 vk1) = do
     directSerialise push sk
@@ -488,7 +487,6 @@ instance ( DirectSerialise (SignKeyKES d)
 instance ( DirectDeserialise (SignKeyKES d)
          , DirectDeserialise (VerKeyKES d)
          , KESAlgorithm d
-         , KnownNat (SeedSizeKES d)
          ) => DirectDeserialise (SignKeyKES (CompactSumKES h d)) where
   directDeserialise pull = do
     sk <- directDeserialise pull
